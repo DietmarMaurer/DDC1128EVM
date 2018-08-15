@@ -1,7 +1,7 @@
 import time
 import ctypes
-#import numpy as np
-#import matplotlib.pyplot as plt
+import numpy as np
+import matplotlib.pyplot as plt
 
 CHANNEL = 256
 CHANNEL_1 = CHANNEL * 2
@@ -21,7 +21,7 @@ short_arr_len = ctypes.c_short * 4096
 short_arr_len_1 = ctypes.c_short * 2048
 
 #For FPGAwrite function
-int_arr_255 = ctypes.c_int * 256
+int_arr_256 = ctypes.c_int * 256
 
 #For FPGAwrite function
 double_arr_256 = ctypes.c_double * CHANNEL
@@ -68,18 +68,17 @@ AllDataAorBfirst = ctypes.c_int(0)
 #Arguments for function FPGAwrite
 USBdev = ctypes.c_short()
 DUTSelect = ctypes.c_int()
-RegsIn = int_arr_255()
-RegsOut = int_arr_255()
-RegEnable = int_arr_255()
+RegsIn = int_arr_256()
+RegsOut = int_arr_256()
+RegsEnable = int_arr_256()
 
 #Arguments for function XferINTDataIn
 Array_Data = short_arr_len()
 Array_Data_1 = short_arr_len_1()
 DataLen = ctypes.c_int(512)
 
-
-#Hard reset
-count=0
+# Hard reset
+count = 0
 for i in range(7):
     RegH = ctypes.c_short((Hard_reser_arr[i]>>12) & 0x000F)
     RegL = ctypes.c_short((Hard_reser_arr[i]>>8) & 0x000F)
@@ -93,63 +92,42 @@ if count == 7:
 else:
     print("Hard reset Unsucessfull!!")
 
-#FPGA read operation
+# Format
+RegsIn[0x09] = 24 
+RegsEnable[0x09] = 1
 
-ret = Write_fpga(USBdev, DUTSelect, RegsIn, RegsOut, RegEnable)
-if (ret==0):
-    print("Sucessfully acquired the data from FPGA")
-else:
-    print("Unsucessfully in acquiring the data from FPGA")
-print("\nFunction returned: {:d}".format(ret))
-#print("Output register array: {:s}".format(" ".join(["{:d}".format(item) for
-#      item in RegsOut])))
-print("DVALIDS (Samples) to Ignore: {:d}".format(RegsOut[0x0C]))
-print("DVALIDS (Samples) to Read MSB: {:d}".format(RegsOut[0x0D]))
-print("DVALIDS (Samples) to Read MIDB: {:d}".format(RegsOut[0x0E]))
-print("DVALIDS (Samples) to Read LSB: {:d}".format(RegsOut[0x0F]))
-print("Firmware version: {:d}".format(RegsOut[0x5E]<<8|RegsOut[0x5F]))
-if ((RegsOut[9] & 0x10) == 0x10):
-    print("Data Format: 20 bits")
-if ((RegsOut[8] & 0x01) == 0x01):
-    print("DDC Data Clock: Running mode")
-else:
-    print("DDC Sys Clock: Low mode")
+# to Ignore
+RegsIn[0x0C] = 0x00
+RegsEnable[0x0C] = 1
 
-if ((RegsOut[0x0B] & 0x01) == 0x01):
-    print("DDC Data Clock: Running mode")
-else:
-    print("DDC Data Clock: Low mode")
+# to Read MSB
+RegsIn[0x0D] = 0x00
+RegsEnable[0x0D] = 1
 
+# to read MIDB
+RegsIn[0x0E] = 0x04
+RegsEnable[0x0E] = 1
 
-#FPGA write operation
-print("\nFPGA write operation start")    
-#RegsIn[0x09] = 0x08
-#RegEnable[0x09] = 1
-ret = Write_fpga(USBdev, DUTSelect, RegsIn, RegsOut, RegEnable)
+# to read LSB
+RegsIn[0x0F] = 0x00
+RegsEnable[0x0F] = 1
+
+ret = Write_fpga(USBdev, DUTSelect, RegsIn, RegsOut, RegsEnable)
 print("Function returned: {:d}".format(ret))
-print("Output register array: {:s}".format(" ".join(["{:d}".format(item) for
-      item in RegsOut])))
-print("\nDVALIDS (Samples) to Ignore: {:d}".format(RegsOut[0x0C]))
-print("DVALIDS (Samples) to Read MSB: {:d}".format(RegsOut[0x0D]))
-print("DVALIDS (Samples) to Read MIDB: {:d}".format(RegsOut[0x0E]))
-print("DVALIDS (Samples) to Read LSB: {:d}".format(RegsOut[0x0F]))
 print("Firmware version: {:d}".format(RegsOut[0x5E]<<8|RegsOut[0x5F]))
-#RegEnable[0x09] = 0
-print("FPGA write operation end")  
+print("Output register array: {:s}".format(" ".join(["{:d}".format(item) for item in RegsOut])))
+print("\nDVALIDS (Samples) to Ignore: {:d}".format(RegsOut[0x0C]))
+print("DVALIDS (Samples) to Read MSB: {:d}".format(RegsOut[0x0D] << 16| RegsOut[0x0E] << 8 | RegsOut[0x0F]))
+print("Load CONV Low:  {:d}", RegsOut[0x01] << 16 | RegsOut[0x02] << 8 | RegsOut[0x03]);
+print("Load CONV High: {:d}", RegsOut[0x04] << 16 | RegsOut[0x05] << 8 | RegsOut[0x06]);
 
+# Fastdata aquire and plot
+ret = fast_data(AVGArr, RMSArr, P2PArr, MAXArr, MINArr, ArrSize, Channels, Samples, DataArray, ctypes.byref(AllDataAorBfirst))
 
-#Fastdata aquire and plot
-try:
-    ret = fast_data(AVGArr, RMSArr, P2PArr, MAXArr, MINArr, ArrSize, Channels, Samples, DataArray, ctypes.byref(AllDataAorBfirst))
-except:
-    print("\nFunction returned: {:d}".format(ret))
-#print("Output register array: {:s}".format(" ".join(["{:f}".format(item) for
-#      item in DataArray])))
+print("DataArray[0]   = {:f}".format(DataArray[0]))
+print("DataArray[1]   = {:f}".format(DataArray[1]))
+print("DataArray[191] = {:f}".format(DataArray[191]))
+print("DataArray[192] = {:f}".format(DataArray[192]))
 
-print("DataArray[0]= {:f}".format(DataArray[0]))
-print("DataArray[1]= {:f}".format(DataArray[1]))
-print("DataArray[191]= {:f}".format(DataArray[191]))
-print("DataArray[192]= {:f}".format(DataArray[192]))
-
-#plt.plot(DataArray)
-#plt.show()
+plt.plot(DataArray)
+plt.show()
